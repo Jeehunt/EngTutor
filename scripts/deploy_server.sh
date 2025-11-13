@@ -48,12 +48,12 @@ git pull origin main || git pull origin master || true
 
 echo "🏗️  Сборка frontend..."
 cd frontend
-if [ ! -d node_modules ]; then
-    echo "📦 Установка npm зависимостей..."
-    npm ci
+if [ ! -f package-lock.json ]; then
+    echo "📦 Установка npm зависимостей (первый запуск)..."
+    npm install
 else
-    echo "📦 Обновление npm зависимостей..."
-    npm ci
+    echo "📦 Установка npm зависимостей..."
+    npm ci || npm install
 fi
 echo "🔨 Сборка production версии..."
 npm run build
