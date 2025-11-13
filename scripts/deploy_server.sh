@@ -47,6 +47,11 @@ git fetch origin
 git pull origin main || git pull origin master || true
 
 echo "🏗️  Сборка frontend..."
+# Загрузка nvm для Node.js 20
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/nvm.sh" ] && nvm use 20 2>/dev/null || true
+
 cd frontend
 if [ ! -f package-lock.json ]; then
     echo "📦 Установка npm зависимостей (первый запуск)..."
