@@ -94,10 +94,30 @@ DUMP_FILE="/tmp/engtutor_dump_$(date +%Y%m%d_%H%M%S).sql"
 
 if [ "$DIRECTION" = "to-server" ]; then
     echo -e "${GREEN}📤 Создание дампа локальной БД...${NC}"
-    pg_dump "$LOCAL_DB_URL" > "$DUMP_FILE" || {
-        echo -e "${RED}❌ Ошибка при создании дампа${NC}"
-        exit 1
-    }
+    # Проверка, используется ли Docker для локальной БД
+    if command -v docker &> /dev/null && [ -f "$PROJECT_DIR/docker-compose.yml" ]; then
+        # Извлечение имени контейнера из docker-compose.yml
+        CONTAINER_NAME=$(cd "$PROJECT_DIR" && docker compose ps -q db 2>/dev/null | head -1)
+        if [ -n "$CONTAINER_NAME" ]; then
+            echo -e "${YELLOW}📦 Использование Docker контейнера для дампа...${NC}"
+            docker compose -f "$PROJECT_DIR/docker-compose.yml" exec -T db pg_dump -U engtutor engtutor > "$DUMP_FILE" || {
+                echo -e "${RED}❌ Ошибка при создании дампа через Docker${NC}"
+                exit 1
+            }
+        else
+            # Пробуем через pg_dump напрямую
+            pg_dump "$LOCAL_DB_URL" > "$DUMP_FILE" || {
+                echo -e "${RED}❌ Ошибка при создании дампа${NC}"
+                exit 1
+            }
+        fi
+    else
+        # Пробуем через pg_dump напрямую
+        pg_dump "$LOCAL_DB_URL" > "$DUMP_FILE" || {
+            echo -e "${RED}❌ Ошибка при создании дампа${NC}"
+            exit 1
+        }
+    fi
     
     echo -e "${GREEN}📤 Передача дампа на сервер...${NC}"
     scp "$DUMP_FILE" engtutor-server:/tmp/engtutor_dump.sql || {
@@ -107,12 +127,11 @@ if [ "$DIRECTION" = "to-server" ]; then
     }
     
     echo -e "${GREEN}📥 Восстановление БД на сервере...${NC}"
-    ssh engtutor-server << ENDSSH
+    ssh engtutor-server << 'ENDSSH'
         cd /var/www/EngTutor
-        source .env.production
-        export PGPASSWORD=\$DB_PASSWORD
-        psql -h db -U engtutor -d engtutor -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || true
-        psql -h db -U engtutor -d engtutor < /tmp/engtutor_dump.sql
+        # Используем docker compose для подключения к БД
+        docker compose -f docker-compose.prod.yml exec -T db psql -U engtutor -d engtutor -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || true
+        docker compose -f docker-compose.prod.yml exec -T db psql -U engtutor -d engtutor < /tmp/engtutor_dump.sql
         rm -f /tmp/engtutor_dump.sql
         echo "✅ БД восстановлена на сервере"
 ENDSSH
@@ -121,11 +140,10 @@ ENDSSH
     echo -e "${GREEN}✅ Синхронизация завершена: локальная → сервер${NC}"
 else
     echo -e "${GREEN}📤 Создание дампа БД на сервере...${NC}"
-    ssh engtutor-server << ENDSSH
+    ssh engtutor-server << 'ENDSSH'
         cd /var/www/EngTutor
-        source .env.production
-        export PGPASSWORD=\$DB_PASSWORD
-        pg_dump -h db -U engtutor -d engtutor > /tmp/engtutor_dump.sql
+        # Используем docker compose для создания дампа
+        docker compose -f docker-compose.prod.yml exec -T db pg_dump -U engtutor engtutor > /tmp/engtutor_dump.sql
         echo "✅ Дамп создан на сервере"
 ENDSSH
     
@@ -137,14 +155,38 @@ ENDSSH
     
     echo -e "${GREEN}📥 Восстановление локальной БД...${NC}"
     if [ -f "$PROJECT_DIR/.env" ]; then
-        source "$PROJECT_DIR/.env"
-        export PGPASSWORD=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
-        psql "$DATABASE_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || true
-        psql "$DATABASE_URL" < "$DUMP_FILE" || {
-            echo -e "${RED}❌ Ошибка при восстановлении БД${NC}"
-            rm -f "$DUMP_FILE"
-            exit 1
-        }
+        # Проверка, используется ли Docker для локальной БД
+        if command -v docker &> /dev/null && [ -f "$PROJECT_DIR/docker-compose.yml" ]; then
+            CONTAINER_NAME=$(cd "$PROJECT_DIR" && docker compose ps -q db 2>/dev/null | head -1)
+            if [ -n "$CONTAINER_NAME" ]; then
+                echo -e "${YELLOW}📦 Использование Docker контейнера для восстановления...${NC}"
+                cd "$PROJECT_DIR"
+                docker compose exec -T db psql -U engtutor -d engtutor -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || true
+                docker compose exec -T db psql -U engtutor -d engtutor < "$DUMP_FILE" || {
+                    echo -e "${RED}❌ Ошибка при восстановлении БД через Docker${NC}"
+                    rm -f "$DUMP_FILE"
+                    exit 1
+                }
+            else
+                source "$PROJECT_DIR/.env"
+                export PGPASSWORD=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
+                psql "$DATABASE_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || true
+                psql "$DATABASE_URL" < "$DUMP_FILE" || {
+                    echo -e "${RED}❌ Ошибка при восстановлении БД${NC}"
+                    rm -f "$DUMP_FILE"
+                    exit 1
+                }
+            fi
+        else
+            source "$PROJECT_DIR/.env"
+            export PGPASSWORD=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
+            psql "$DATABASE_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || true
+            psql "$DATABASE_URL" < "$DUMP_FILE" || {
+                echo -e "${RED}❌ Ошибка при восстановлении БД${NC}"
+                rm -f "$DUMP_FILE"
+                exit 1
+            }
+        fi
     else
         echo -e "${RED}❌ Файл .env не найден${NC}"
         rm -f "$DUMP_FILE"
