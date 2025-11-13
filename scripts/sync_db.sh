@@ -130,8 +130,14 @@ if [ "$DIRECTION" = "to-server" ]; then
     ssh engtutor-server << 'ENDSSH'
         cd /var/www/EngTutor
         # Используем docker compose для подключения к БД
+        # Сначала удаляем схему и создаем заново
         docker compose -f docker-compose.prod.yml exec -T db psql -U engtutor -d engtutor -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || true
+        # Восстанавливаем полный дамп (структура + данные)
         docker compose -f docker-compose.prod.yml exec -T db psql -U engtutor -d engtutor < /tmp/engtutor_dump.sql
+        # Применяем миграции на случай, если структура изменилась
+        source .env.production
+        export DB_PASSWORD
+        docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade head 2>/dev/null || true
         rm -f /tmp/engtutor_dump.sql
         echo "✅ БД восстановлена на сервере"
 ENDSSH
