@@ -68,6 +68,10 @@ echo "🗄️  Применение миграций БД..."
 docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade head || echo "⚠️  Миграции не применены (возможно, БД еще не создана)"
 
 echo "🐳 Сборка и запуск контейнеров..."
+# Загрузка переменных окружения для docker-compose
+set -a
+source .env.production
+set +a
 docker compose -f docker-compose.prod.yml up -d --build
 
 echo "⏳ Ожидание готовности сервисов..."
