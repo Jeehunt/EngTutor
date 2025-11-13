@@ -1,0 +1,620 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="two-column">
+  <!-- Форма добавления слов -->
+  <div class="add-col">
+    <div class="card add-words-card">
+        <div class="card-body">
+            <form action="/words/add" method="post" id="addWordsForm">
+                <div class="form-group">
+                    <label for="words">Слова или фразы:</label>
+                    <textarea 
+                        id="words" 
+                        name="words" 
+                        class="form-control" 
+                        rows="4" 
+                        placeholder="Введите слова или фразы через запятую или с новой строки. Например:&#10;hello, world&#10;beautiful&#10;to study"
+                        required
+                    ></textarea>
+                <div class="form-info">
+                    <button type="submit" class="btn btn-primary" id="addBtn">
+                        <span class="btn-text">Добавить</span>
+                        <span class="btn-loading" style="display: none;">
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            Добавление...
+                        </span>
+                    </button>
+                    <button type="button" id="clearBtn" class="btn btn-outline-secondary">Очистить</button>
+                </div>
+                </div>
+            </form>
+        </div>
+    </div>
+  </div>
+
+  <!-- Поиск и фильтрация -->
+  <div class="search-col">
+    <div class="card search-card">
+        <div class="card-body">
+            <form method="get" class="search-form">
+                <input type="hidden" name="sort" value="{{ sort }}">
+                <input type="hidden" name="dir" value="{{ dir }}">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="search">Поиск:</label>
+                            <input 
+                                type="text" 
+                                id="search" 
+                                name="search" 
+                                class="form-control" 
+                                placeholder="Поиск по слову, переводу, тегам или группе..."
+                                value="{{ search or '' }}"
+                            >
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="filter">Фильтр:</label>
+                            <select id="filter" name="filter" class="form-control">
+                                <option value="">Все поля</option>
+                                <option value="word" {% if filter == 'word' %}selected{% endif %}>Только слова</option>
+                                <option value="translation" {% if filter == 'translation' %}selected{% endif %}>Только переводы</option>
+                                <option value="tags" {% if filter == 'tags' %}selected{% endif %}>Только теги</option>
+                                <option value="group" {% if filter == 'group' %}selected{% endif %}>Только группы</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>&nbsp;</label>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary flex-fill">
+                                    <i class="bi bi-search"></i> Найти
+                                </button>
+                                <a href="/words" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+  </div>
+</div>
+
+<!-- Блок действий перенесен в Настройки -->
+
+<!-- Таблица слов (компактно, без карточки) -->
+<div class="words-toolbar">
+    <div class="toolbar-right">
+        <span class="word-count">{{ total_words }} слов</span>
+    <form method="get" class="per-page" style="margin:0" onchange="this.submit()">
+            <input type="hidden" name="search" value="{{ search or '' }}">
+            <input type="hidden" name="filter" value="{{ filter or '' }}">
+            <input type="hidden" name="page" value="1">
+        <input type="hidden" name="sort" value="{{ sort }}">
+        <input type="hidden" name="dir" value="{{ dir }}">
+            <select name="per_page" class="form-control" style="min-width: 84px;">
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+                <option value="500" {% if per_page == 500 %}selected{% endif %}>500</option>
+            </select>
+        </form>
+        <span class="page-info">Страница {{ page }} из {{ total_pages }}</span>
+    </div>
+</div>
+
+{% if words %}
+<div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>
+                            <a class="sortable" href="?page=1&per_page={{ per_page }}{% if search %}&search={{ search }}{% endif %}{% if filter %}&filter={{ filter }}{% endif %}&sort=id&dir={{ 'asc' if sort == 'id' and dir == 'desc' else 'desc' }}">#</a>
+                        </th>
+                        <th>
+                            <a class="sortable" href="?page=1&per_page={{ per_page }}{% if search %}&search={{ search }}{% endif %}{% if filter %}&filter={{ filter }}{% endif %}&sort=text&dir={{ 'asc' if sort == 'text' and dir == 'desc' else 'desc' }}">Слово/фраза</a>
+                        </th>
+                        <th class="col-translations">Переводы</th>
+                        <th>Теги</th>
+                        <th class="col-group">Группа</th>
+                        <th>Пример использования</th>
+                        <th>Перевод примера</th>
+                        <th>
+                            <a class="sortable" href="?page=1&per_page={{ per_page }}{% if search %}&search={{ search }}{% endif %}{% if filter %}&filter={{ filter }}{% endif %}&sort=uses&dir={{ 'asc' if sort == 'uses' and dir == 'desc' else 'desc' }}">Использований</a>
+                        </th>
+                        
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for word in words %}
+                    <tr data-id="{{ word.id }}" data-text="{{ word.text|e }}" data-main="{{ (word.main_translation or '')|e }}" data-group="{{ (word.group_name or '')|e }}">
+                        <td class="text-center">{{ word.id }}</td>
+                        <td>
+                            <a href="#" class="word-link" data-word-id="{{ word.id }}" data-main="{{ (word.main_translation or '')|e }}" data-alts="{{ (word.alt_translations|join(', ') if word.alt_translations else '')|e }}"><strong>{{ word.text }}</strong></a>
+                        </td>
+                        <td class="col-translations" title="{{ (word.main_translation or '—') ~ ((' — ' ~ (word.alt_translations | join(', '))) if word.alt_translations else '') }}">
+                            {% if word.main_translation %}
+                                <strong>{{ word.main_translation }}</strong>
+                            {% else %}
+                                —
+                            {% endif %}
+                            {% if word.alt_translations %}
+                                — {{ word.alt_translations[:3] | join(', ') }}{% if word.alt_translations|length > 3 %}, +{{ word.alt_translations|length - 3 }}{% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if word.tags %}
+                                {% for tag in word.tags[:2] %}
+                                    <span class="badge bg-info me-1">{{ tag }}</span>
+                                {% endfor %}
+                                {% if word.tags|length > 2 %}
+                                    <span class="badge bg-light text-dark">+{{ word.tags|length - 2 }}</span>
+                                {% endif %}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td class="col-group" title="{{ word.group_name or '—' }}">{{ word.group_name or '—' }}</td>
+                        <td>
+                            {% if word.usage_example %}
+                                <small>{{ word.usage_example[:50] }}{% if word.usage_example|length > 50 %}...{% endif %}</small>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if word.usage_example_translation %}
+                                <small>{{ word.usage_example_translation[:50] }}{% if word.usage_example_translation|length > 50 %}...{% endif %}</small>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-primary">{{ word.uses_count or 0 }}</span>
+                        </td>
+                        
+                    </tr>
+                    {% endfor %}
+                </tbody>
+    </table>
+</div>
+<!-- Floating action toolbar anchored to viewport right -->
+<div id="rowActions" class="row-actions d-none">
+    <button class="btn btn-sm btn-outline-primary btn-icon" data-action="copy" title="Копировать"><i class="bi bi-clipboard"></i></button>
+    <button class="btn btn-sm btn-outline-warning btn-icon" data-action="edit" title="Редактировать"><i class="bi bi-pencil"></i></button>
+    <button class="btn btn-sm btn-outline-danger btn-icon" data-action="delete" title="Удалить"><i class="bi bi-trash"></i></button>
+    <button class="btn btn-sm btn-outline-primary btn-icon" data-action="examples" title="+5 примеров">+5</button>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-icon">📚</div>
+    <h4>Словарь пуст</h4>
+    <p>Добавьте свои первые слова, чтобы начать изучение английского языка!</p>
+    <p class="text-muted">Используйте форму выше для добавления слов.</p>
+</div>
+{% endif %}
+
+<!-- Пагинация -->
+{% if total_pages > 1 %}
+<div class="card pagination-card">
+    <div class="card-body">
+        <div class="pagination-container">
+            <div class="pagination-info">
+                <span>Показано {{ (page - 1) * per_page + 1 }}-{{ min(page * per_page, total_words) }} из {{ total_words }} слов</span>
+            </div>
+            <nav aria-label="Навигация по страницам">
+                <ul class="pagination">
+                    <!-- Кнопка "Предыдущая" -->
+                    {% if has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ prev_page }}&per_page={{ per_page }}{% if search %}&search={{ search }}{% endif %}{% if filter %}&filter={{ filter }}{% endif %}&sort={{ sort }}&dir={{ dir }}">
+                            <i class="bi bi-chevron-left"></i> Предыдущая
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">
+                            <i class="bi bi-chevron-left"></i> Предыдущая
+                        </span>
+                    </li>
+                    {% endif %}
+
+                    <!-- Первая страница -->
+                    {% if start_page > 1 %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1&per_page={{ per_page }}{% if search %}&search={{ search }}{% endif %}{% if filter %}&filter={{ filter }}{% endif %}&sort={{ sort }}&dir={{ dir }}">1</a>
+                    </li>
+                    {% if start_page > 2 %}
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                    {% endif %}
+                    {% endif %}
+
+                    <!-- Страницы в диапазоне -->
+                    {% for p in range(start_page, end_page + 1) %}
+                    <li class="page-item {% if p == page %}active{% endif %}">
+                        <a class="page-link" href="?page={{ p }}&per_page={{ per_page }}{% if search %}&search={{ search }}{% endif %}{% if filter %}&filter={{ filter }}{% endif %}&sort={{ sort }}&dir={{ dir }}">{{ p }}</a>
+                    </li>
+                    {% endfor %}
+
+                    <!-- Последняя страница -->
+                    {% if end_page < total_pages %}
+                    {% if end_page < total_pages - 1 %}
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                    {% endif %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ total_pages }}&per_page={{ per_page }}{% if search %}&search={{ search }}{% endif %}{% if filter %}&filter={{ filter }}{% endif %}&sort={{ sort }}&dir={{ dir }}">{{ total_pages }}</a>
+                    </li>
+                    {% endif %}
+
+                    <!-- Кнопка "Следующая" -->
+                    {% if has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ next_page }}&per_page={{ per_page }}{% if search %}&search={{ search }}{% endif %}{% if filter %}&filter={{ filter }}{% endif %}&sort={{ sort }}&dir={{ dir }}">
+                            Следующая <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">
+                            Следующая <i class="bi bi-chevron-right"></i>
+                        </span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Модальное окно подтверждения удаления -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                    Подтверждение удаления
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы действительно хотите удалить слово <strong id="deleteWordText"></strong>?</p>
+                <p class="text-muted">Это действие нельзя отменить.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger" id="confirmDelete">Удалить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Подсчет символов и слов
+const textarea = document.getElementById('words');
+const clearBtn = document.getElementById('clearBtn');
+const addBtn = document.getElementById('addBtn');
+
+function updateCounts() {
+    const text = textarea.value;
+    const chars = text.length;
+    
+    // Валидация
+    if (chars > 10000) {
+        textarea.style.borderColor = '#dc3545';
+        addBtn.disabled = true;
+    } else {
+        textarea.style.borderColor = '#e1e5e9';
+        addBtn.disabled = false;
+    }
+}
+
+textarea.addEventListener('input', updateCounts);
+clearBtn.addEventListener('click', () => {
+    textarea.value = '';
+    updateCounts();
+    textarea.focus();
+});
+
+// Валидация формы
+document.getElementById('addWordsForm').addEventListener('submit', function(e) {
+    const text = textarea.value.trim();
+    if (!text) {
+        e.preventDefault();
+        alert('Пожалуйста, введите хотя бы одно слово или фразу');
+        textarea.focus();
+        return;
+    }
+    
+    if (text.length > 10000) {
+        e.preventDefault();
+        alert('Слишком много текста. Максимум 10,000 символов.');
+        textarea.focus();
+        return;
+    }
+
+    // Показать состояние загрузки
+    showLoading();
+    
+    // Автоматически скрыть загрузку через 10 секунд
+    setTimeout(hideLoading, 10000);
+});
+
+// Функции действий доступны на странице Настройки
+
+function copyWord(text, event) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+            // Простая обратная связь
+            const btn = event.target.closest('button');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check"></i>';
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('btn-success');
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-outline-primary');
+            }, 1000);
+        });
+    }
+}
+
+function editWord(id, text, translation, group) {
+    const newText = prompt('Изменить слово/фразу:', text || '');
+    if (newText === null) return;
+    const newTr = prompt('Изменить перевод:', translation || '');
+    if (newTr === null) return;
+    const newGroup = prompt('Изменить группу:', group || '');
+    if (newGroup === null) return;
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/words/${id}/edit`;
+    const f1 = Object.assign(document.createElement('input'), {name: 'text', value: newText});
+    const f2 = Object.assign(document.createElement('input'), {name: 'main_translation', value: newTr});
+    const f3 = Object.assign(document.createElement('input'), {name: 'group_name', value: newGroup});
+    form.appendChild(f1); form.appendChild(f2); form.appendChild(f3);
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function deleteWord(id, text) {
+    document.getElementById('deleteWordText').textContent = text;
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+    
+    document.getElementById('confirmDelete').onclick = function() {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/words/${id}/delete`;
+        document.body.appendChild(form);
+        form.submit();
+    };
+}
+
+// +5 примеров через OpenAI
+function showExamples(id, text) {
+    fetch(`/words/${id}/examples`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            const list = (data.examples || []).map(it => `<li><strong>${it.en}</strong><br><small>${it.ru}</small></li>`).join('');
+            const html = `
+            <div class="modal fade" id="examplesModal" tabindex="-1">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title">Примеры для: ${text}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body"><ul style="padding-left:18px; margin:0; display:flex; flex-direction:column; gap:8px;">${list || '<li>Не удалось получить примеры</li>'}</ul></div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+            const container = document.createElement('div');
+            container.innerHTML = html;
+            document.body.appendChild(container);
+            const m = new bootstrap.Modal(container.querySelector('#examplesModal'));
+            m.show();
+            container.addEventListener('hidden.bs.modal', () => container.remove());
+        });
+}
+
+// Состояние загрузки
+function showLoading() {
+    const btnText = addBtn.querySelector('.btn-text');
+    const btnLoading = addBtn.querySelector('.btn-loading');
+    
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline-flex';
+    addBtn.disabled = true;
+}
+
+function hideLoading() {
+    const btnText = addBtn.querySelector('.btn-text');
+    const btnLoading = addBtn.querySelector('.btn-loading');
+    
+    btnText.style.display = 'inline';
+    btnLoading.style.display = 'none';
+    addBtn.disabled = false;
+}
+
+// Автофокус на поле ввода
+textarea.focus();
+</script>
+<script>
+// Popover for word details with instant show, async enrichment, and caching
+(function(){
+  const table = document.querySelector('.table');
+  if (!table) return;
+  const cache = new Map(); // wordId -> HTML
+  let current = null; // currently open anchor
+
+  function buildInitialHtml(a){
+    const text = a.textContent.trim();
+    const main = (a.getAttribute('data-main') || '').trim();
+    const alts = (a.getAttribute('data-alts') || '').trim();
+    const esc = (s) => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const lines = [];
+    lines.push(`<div class=\"tooltip-word\"><strong>${esc(text)}</strong></div>`);
+    let tr = main ? esc(main) : '—';
+    if (alts) tr += ' — ' + esc(alts);
+    lines.push(`<div class=\"tooltip-translations\">${tr}</div>`);
+    lines.push(`<div class=\"tooltip-synonyms\"><em>Synonyms:</em> <span class=\"text-muted\">загружаем…</span></div>`);
+    lines.push(`<div class=\"tooltip-examples\"><ol style=\"margin:0 0 0 16px; padding:0;\"><li class=\"text-muted\">загружаем примеры…</li></ol></div>`);
+    return lines.join('');
+  }
+
+  function showPopover(a, html){
+    // close previous
+    if (current && current !== a && current._popover){ current._popover.hide(); current = null; }
+    // dispose existing
+    if (a._popover){ a._popover.dispose(); a._popover = null; }
+    a.setAttribute('data-bs-html', 'true');
+    a.setAttribute('data-bs-content', html);
+    a.setAttribute('data-bs-toggle', 'popover');
+    a.setAttribute('data-bs-placement', 'right');
+    // use manual trigger with custom class for styling
+    const pop = new bootstrap.Popover(a, {html: true, trigger: 'manual', customClass: 'word-popover', container: 'body'});
+    a._popover = pop;
+    pop.show();
+    current = a;
+  }
+
+  function updatePopoverContent(a, html){
+    if (!a._popover) return;
+    try {
+      const tip = a._popover.getTipElement ? a._popover.getTipElement() : null;
+      const body = tip ? tip.querySelector('.popover-body') : null;
+      if (body) body.innerHTML = html;
+      else {
+        // fallback: reset content attr and re-show
+        a.setAttribute('data-bs-content', html);
+        a._popover.dispose();
+        const pop = new bootstrap.Popover(a, {html: true, trigger: 'manual', customClass: 'word-popover', container: 'body'});
+        a._popover = pop; pop.show();
+      }
+    } catch(e) {}
+  }
+
+  // click outside to close
+  document.addEventListener('click', function(ev){
+    if (!current) return;
+    if (ev.target.closest('.popover') || ev.target.closest('a.word-link') === current) return;
+    current._popover && current._popover.hide();
+    current = null;
+  });
+
+  table.addEventListener('click', async function(e){
+    const a = e.target.closest('a.word-link');
+    if (!a) return;
+    e.preventDefault();
+    const id = a.getAttribute('data-word-id');
+    // toggle if already open on the same link
+    if (current === a){
+      a._popover && a._popover.hide();
+      current = null;
+      return;
+    }
+    const initial = buildInitialHtml(a);
+    showPopover(a, cache.get(id) || initial);
+    if (cache.has(id)) return; // already enriched
+    try {
+      const r = await fetch(`/words/${id}/tooltip`);
+      const data = await r.json();
+      const html = data && data.html ? data.html : null;
+      if (html){
+        cache.set(id, html);
+        updatePopoverContent(a, html);
+      }
+    } catch(err) { /* ignore */ }
+  });
+})();
+
+// Floating actions controller: show on row hover, stick to viewport right
+(function(){
+  const box = document.getElementById('rowActions');
+  if (!box) return;
+  let currentRow = null;
+  let hideTimer = null;
+
+  function hideSoon(delay=150){
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(()=>{ box.classList.add('d-none'); currentRow = null; }, delay);
+  }
+  function cancelHide(){ clearTimeout(hideTimer); }
+
+  function showForRow(tr){
+    cancelHide();
+    currentRow = tr;
+    // Make visible to measure height correctly
+    const wasHidden = box.classList.contains('d-none');
+    if (wasHidden) box.classList.remove('d-none');
+    const rect = tr.getBoundingClientRect();
+    const h = box.offsetHeight || 40;
+    let top = Math.round(rect.top + rect.height/2 - h/2);
+    // Clamp to viewport (leave header zone ~56px)
+    const minTop = 56;
+    const maxTop = Math.max(minTop, window.innerHeight - h - 8);
+    top = Math.min(Math.max(top, minTop), maxTop);
+    box.style.top = top + 'px';
+    box.style.right = '12px';
+  }
+
+  const tbody = document.querySelector('.table tbody');
+  if (!tbody) return;
+  tbody.addEventListener('mousemove', (e)=>{
+    const tr = e.target.closest('tr');
+    if (!tr || !tbody.contains(tr)) return;
+    if (tr !== currentRow) showForRow(tr);
+  });
+  tbody.addEventListener('mouseleave', ()=> hideSoon(200));
+
+  // Keep visible when hovering the panel itself
+  box.addEventListener('mouseenter', cancelHide);
+  box.addEventListener('mouseleave', ()=> hideSoon(150));
+
+  // Reposition on scroll/resize
+  window.addEventListener('scroll', ()=>{ if (currentRow) showForRow(currentRow); }, {passive:true});
+  window.addEventListener('resize', ()=>{ if (currentRow) showForRow(currentRow); });
+
+  // Actions
+  box.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-action]');
+    if (!btn || !currentRow) return;
+    const action = btn.getAttribute('data-action');
+    const id = currentRow.dataset.id;
+    const text = currentRow.dataset.text || '';
+    const main = currentRow.dataset.main || '';
+    const group = currentRow.dataset.group || '';
+    if (action === 'copy') {
+      copyWord(text, e);
+    } else if (action === 'edit') {
+      editWord(id, text, main, group);
+    } else if (action === 'delete') {
+      deleteWord(id, text);
+    } else if (action === 'examples') {
+      showExamples(id, text);
+    }
+  });
+})();
+</script>
+{% endblock %}
+
+

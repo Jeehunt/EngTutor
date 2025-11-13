@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card actions-card">
+    <div class="card-header">
+        <h3><i class="bi bi-gear"></i> Настройки</h3>
+    </div>
+    <div class="card-body">
+        <div class="actions-grid">
+            <button class="action-btn" onclick="enrichMissing()">
+                <i class="bi bi-magic"></i>
+                <span>Автозаполнить пропущенные поля (OpenAI GPT-4)</span>
+            </button>
+            <button class="action-btn" onclick="rewriteAll()">
+                <i class="bi bi-arrow-repeat"></i>
+                <span>Перезаписать ВСЕ данные (OpenAI GPT-4)</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h3><i class="bi bi-robot"></i> Промпт ассистента</h3>
+    </div>
+    <div class="card-body">
+        <div class="mb-2 small text-muted">Эта подсказка отправляется как системное сообщение модели. Можно использовать любой текст. Сохранение вступает в силу сразу.</div>
+        <textarea id="assistant_prompt" class="form-control" rows="8" placeholder="Введите системный промпт ассистента..."></textarea>
+        <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-primary" onclick="savePrompt()">Сохранить</button>
+            <button class="btn btn-outline-secondary" onclick="loadPrompt()">Обновить</button>
+        </div>
+        <div id="prompt_status" class="small mt-2 text-muted"></div>
+    </div>
+  </div>
+
+<script>
+function enrichMissing() {
+  if (confirm('Автозаполнить все пропущенные поля для существующих слов? Это может занять несколько минут.')) {
+    window.location.href = '/words/re-enrich';
+  }
+}
+
+function rewriteAll() {
+  if (confirm('ВНИМАНИЕ! Это действие перезапишет ВСЕ данные в словаре. Продолжить?')) {
+    window.location.href = '/words/rewrite-all';
+  }
+}
+
+async function loadPrompt(){
+  try{
+    const r = await fetch('/settings/assistant-prompt');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const data = await r.json();
+    document.getElementById('assistant_prompt').value = data.prompt || '';
+    document.getElementById('prompt_status').textContent = 'Загружено.';
+  }catch(e){
+    document.getElementById('prompt_status').textContent = 'Не удалось загрузить промпт.';
+  }
+}
+
+async function savePrompt(){
+  const val = document.getElementById('assistant_prompt').value;
+  try{
+    const r = await fetch('/settings/assistant-prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({prompt: val})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const data = await r.json();
+    if(data && data.ok){
+      document.getElementById('prompt_status').textContent = 'Сохранено.';
+    } else {
+      document.getElementById('prompt_status').textContent = 'Ошибка сохранения.';
+    }
+  }catch(e){
+    document.getElementById('prompt_status').textContent = 'Не удалось сохранить промпт.';
+  }
+}
+
+// Автозагрузка при входе на страницу
+loadPrompt();
+</script>
+{% endblock %}
+
+

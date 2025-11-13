@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="assistant-page">
+  <div id="chat" class="chat-container"></div>
+
+  <form id="chatForm" class="chat-form chat-fixed" onsubmit="return sendMsg(event)">
+    <div class="chat-input-row">
+      <textarea id="user_input" name="user_input" class="chat-input" rows="1" placeholder="Напишите сообщение… (Shift+Enter — перенос строки)" required></textarea>
+      <button class="send-btn" type="submit" title="Отправить">➤</button>
+    </div>
+    <div class="chat-actions mt-2">
+      <button class="btn btn-outline-secondary btn-sm" type="button" onclick="resetConversation()">Новая беседа</button>
+    </div>
+  </form>
+</div>
+
+<script>
+const chatBox = document.getElementById('chat');
+let conversationId = null;
+let typingEl = null;
+let resizeTimer = null;
+
+function formatBB(text){
+  if(!text) return '';
+  // Escape HTML first
+  let s = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  // Bold variations
+  s = s.replace(/__([\s\S]*?)__/g, '<strong>$1</strong>');
+  s = s.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>');
+  // Italic variations
+  s = s.replace(/\[i\]([\s\S]*?)\[\/i\]/gi, '<em>$1</em>');
+  s = s.replace(/_([\s\S]*?)_/g, '<em>$1</em>');
+  s = s.replace(/\*([\s\S]*?)\*/g, '<em>$1</em>');
+  // New lines
+  s = s.replace(/\r?\n/g, '<br/>');
+  return s;
+}
+
+function addMsg(role, text) {
+  const wrap = document.createElement('div');
+  wrap.className = 'message ' + (role === 'user' ? 'user' : 'assistant');
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = role === 'user' ? 'Вы' : 'AI';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML = formatBB(text);
+
+  wrap.appendChild(avatar);
+  wrap.appendChild(bubble);
+  chatBox.appendChild(wrap);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function showTyping() {
+  if (typingEl) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'message assistant typing';
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = 'AI';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  const d1 = document.createElement('span'); d1.className = 'typing-dot';
+  const d2 = document.createElement('span'); d2.className = 'typing-dot';
+  const d3 = document.createElement('span'); d3.className = 'typing-dot';
+  bubble.appendChild(d1); bubble.appendChild(d2); bubble.appendChild(d3);
+  wrap.appendChild(avatar); wrap.appendChild(bubble);
+  chatBox.appendChild(wrap);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  typingEl = wrap;
+}
+
+function hideTyping() {
+  if (!typingEl) return;
+  typingEl.remove();
+  typingEl = null;
+}
+
+async function startConversation(){
+  try {
+    const r = await fetch('/assistant/start', {method:'POST'});
+    if(!r.ok) return;
+    const data = await r.json();
+    conversationId = data.conversation_id || null;
+  } catch(e) {}
+}
+
+async function resetConversation(){
+  chatBox.innerHTML = '';
+  conversationId = null;
+  await startConversation();
+  resizeChat();
+}
+
+async function sendMsg(e){
+  e.preventDefault();
+  const ta = document.getElementById('user_input');
+  const text = ta.value.trim();
+  if(!text) return false;
+  addMsg('user', text);
+  ta.value = '';
+  autosizeTextarea();
+  try {
+    // авто-старт беседы, если нужно
+    if(!conversationId){
+      await startConversation();
+    }
+    showTyping();
+    const r = await fetch('/assistant/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message: text, conversation_id: conversationId})});
+    if(!r.ok){
+      hideTyping();
+      addMsg('assistant', 'Ошибка: '+r.status);
+      return false;
+    }
+    const data = await r.json();
+    if(data.conversation_id){
+      conversationId = data.conversation_id;
+    }
+    hideTyping();
+    addMsg('assistant', data.reply || '');
+    resizeChat();
+  } catch(err){
+    hideTyping();
+    addMsg('assistant', 'Сетевая ошибка');
+  }
+  return false;
+}
+
+// стартуем беседу при загрузке
+startConversation();
+
+// Авто-увеличение textarea и отправка по Enter
+const ta = document.getElementById('user_input');
+function autosizeTextarea(){
+  ta.style.height = '0px';
+  const next = Math.min(ta.scrollHeight, 200);
+  ta.style.height = next + 'px';
+  resizeChat();
+}
+ta.addEventListener('input', autosizeTextarea);
+autosizeTextarea();
+
+const form = document.getElementById('chatForm');
+ta.addEventListener('keydown', function(ev){
+  if(ev.key === 'Enter' && !ev.shiftKey){
+    ev.preventDefault();
+    form.requestSubmit();
+  }
+});
+
+function resizeChat(){
+  try {
+    const form = document.getElementById('chatForm');
+    const headerEl = document.querySelector('header');
+    const headerH = headerEl ? headerEl.offsetHeight : 0;
+    const formH = form ? form.offsetHeight : 0;
+    const padding = 16; // extra spacing
+    const available = Math.max(200, window.innerHeight - headerH - formH - padding);
+    chatBox.style.height = available + 'px';
+    chatBox.style.overflowY = 'auto';
+  } catch (e) {}
+}
+
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(resizeChat, 100);
+});
+
+// Initial layout
+resizeChat();
+</script>
+{% endblock %}
+
+

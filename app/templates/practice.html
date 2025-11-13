@@ -1,0 +1,504 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1>🎮 Практика английского</h1>
+    </div>
+
+    {% if not mode %}
+    <div class="practice-modes">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="practice-card">
+                    <div class="practice-icon">✍️</div>
+                    <h3>Режим 1: Ввод перевода</h3>
+                    <p>Введите русский перевод английского слова или фразы</p>
+                    <a href="/practice/mode1" class="btn btn-primary btn-lg practice-btn">
+                        <span class="btn-icon">🚀</span>
+                        Начать
+                    </a>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="practice-card featured">
+                    <div class="practice-icon">🎯</div>
+                    <h3>Режим 2: Выбор из вариантов</h3>
+                    <p>Выберите правильный перевод из четырех предложенных вариантов</p>
+                    <a href="/practice/mode2" class="btn btn-success btn-lg practice-btn">
+                        <span class="btn-icon">⭐</span>
+                        Начать
+                    </a>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="practice-card">
+                    <div class="practice-icon">🔤</div>
+                    <h3>Режим 3: Ввод слова</h3>
+                    <p>Введите английское слово по русскому переводу</p>
+                    <a href="/practice/mode3" class="btn btn-warning btn-lg practice-btn">
+                        <span class="btn-icon">💪</span>
+                        Начать
+                    </a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="practice-card">
+                    <div class="practice-icon">🧩</div>
+                    <h3>Режим 4: Пропущенное слово</h3>
+                    <p>Вставьте пропущенное слово в предложении (5 предложений)</p>
+                    <a href="/practice/mode4" class="btn btn-primary btn-lg practice-btn">
+                        <span class="btn-icon">🧠</span>
+                        Начать
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if mode == 1 %}
+    <div class="card mb-4">
+        <div class="card-header"><h3>Режим 1: Ввод перевода</h3></div>
+        <div class="card-body">
+            {% if result %}
+            <div class="alert alert-info">
+                Результат: {{ result.correct }} из {{ result.total }} верных
+            </div>
+            <a href="/practice/mode1" class="btn btn-primary">Повторить</a>
+            <a href="/practice" class="btn btn-secondary">К режимам</a>
+            {% else %}
+            <form action="/practice/mode1" method="post">
+                <div class="list-group mb-3">
+                    {% for w in items %}
+                    <div class="list-group-item">
+                        <div class="mb-2"><strong>{{ w.text }}</strong></div>
+                        <input type="hidden" name="ids" value="{{ w.id }}">
+                        <input type="text" name="answers" class="form-control" placeholder="Введите перевод на русский" autocomplete="off">
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="btn btn-success">Проверить</button>
+                <a href="/practice" class="btn btn-link">Назад</a>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if mode == 2 %}
+    <div class="card mb-4">
+        <div class="card-header"><h3>Режим 2: Выбор из вариантов</h3></div>
+        <div class="card-body">
+            {% if result %}
+            <div class="alert alert-info">
+                Результат: {{ result.correct }} из {{ result.total }} верных
+            </div>
+            <a href="/practice/mode2" class="btn btn-primary">Повторить</a>
+            <a href="/practice" class="btn btn-secondary">К режимам</a>
+            {% else %}
+            <form action="/practice/mode2" method="post">
+                <div class="list-group mb-3">
+                    {% for q in mcq %}
+                    <div class="list-group-item">
+                        <div class="mb-2"><strong>{{ q.word.text }}</strong></div>
+                        <input type="hidden" name="ids" value="{{ q.word.id }}">
+                        <select name="answers" class="form-select">
+                            <option value="" disabled selected>Выберите перевод</option>
+                            {% for opt in q.options %}
+                            <option value="{{ opt }}">{{ opt }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="btn btn-success">Проверить</button>
+                <a href="/practice" class="btn btn-link">Назад</a>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if mode == 3 %}
+    <div class="card mb-4">
+        <div class="card-header"><h3>Режим 3: Ввод слова</h3></div>
+        <div class="card-body">
+            <div id="mode3-result" class="alert alert-info d-none"></div>
+            <form id="mode3-form" action="/practice/mode3" method="post">
+                <div class="list-group mb-3">
+                    {% for w in items %}
+                    <div class="list-group-item d-flex align-items-center gap-3" data-item-id="{{ w.id }}">
+                        <div class="flex-grow-1">
+                            <div class="mb-2"><strong>{{ w.main_translation or (w.alt_translations and w.alt_translations[0]) or "Перевод отсутствует" }}</strong></div>
+                            <input type="hidden" name="ids" value="{{ w.id }}">
+                            <input type="text" name="answers" class="form-control" placeholder="Введите слово на английском" autocomplete="off">
+                        </div>
+                        <div class="ms-2 text-nowrap">
+                            <span class="badge bg-secondary d-none" data-correct></span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="btn btn-success">Проверить</button>
+                <a href="/practice" class="btn btn-link">Назад</a>
+            </form>
+            <script>
+                (function(){
+                    const form = document.getElementById('mode3-form');
+                    const resultBar = document.getElementById('mode3-result');
+                    form.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const formData = new FormData(form);
+                        const resp = await fetch(form.action, {
+                            method: 'POST',
+                            headers: { 'Accept': 'application/json' },
+                            body: formData
+                        });
+                        const data = await resp.json();
+                        // Update summary
+                        resultBar.classList.remove('d-none');
+                        resultBar.textContent = `Результат: ${data.correct} из ${data.total} верных`;
+                        // Clear previous marks
+                        form.querySelectorAll('.list-group-item').forEach(item => {
+                            item.classList.remove('border-success','border-danger');
+                            const badge = item.querySelector('[data-correct]');
+                            if (badge) {
+                                badge.className = 'badge';
+                                badge.classList.add('bg-secondary','d-none');
+                                badge.textContent = '';
+                            }
+                        });
+                        // Mark per item
+                        for (const it of data.items) {
+                            const row = form.querySelector(`[data-item-id="${it.id}"]`);
+                            if (!row) continue;
+                            const input = row.querySelector('input[name="answers"]');
+                            const badge = row.querySelector('[data-correct]');
+                            if (it.is_correct) {
+                                row.classList.add('border','border-success');
+                                badge.classList.remove('d-none');
+                                badge.classList.remove('bg-secondary');
+                                badge.classList.add('bg-success');
+                                badge.textContent = 'Верно';
+                                input.classList.remove('is-invalid');
+                                input.classList.add('is-valid');
+                            } else {
+                                row.classList.add('border','border-danger');
+                                badge.classList.remove('d-none');
+                                badge.classList.remove('bg-secondary');
+                                badge.classList.add('bg-danger');
+                                badge.textContent = `Правильно: ${it.correct_answer}`;
+                                input.classList.remove('is-valid');
+                                input.classList.add('is-invalid');
+                            }
+                        }
+                    });
+                })();
+            </script>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if mode == 4 %}
+    <div class="card mb-4">
+        <div class="card-header"><h3>Режим 4: Пропущенное слово</h3></div>
+        <div class="card-body">
+            {% if result %}
+            <div class="alert alert-info">
+                Результат: {{ result.correct }} из {{ result.total }} верных
+            </div>
+            <a href="/practice/mode4" class="btn btn-primary">Повторить</a>
+            <a href="/practice" class="btn btn-secondary">К режимам</a>
+            {% else %}
+            <form id="mode4-form" action="/practice/mode4" method="post">
+                <div class="d-flex justify-content-end mb-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="toggle-choices">Показать варианты</button>
+                </div>
+                <div class="list-group mb-3" id="mode4-list">
+                    {% for q in cloze %}
+                    <div class="list-group-item" data-item-id="{{ q.id }}" data-answer="{{ q.answer }}">
+                        <div class="mb-2"><strong>{{ q.cloze }}</strong></div>
+                        <input type="hidden" name="ids" value="{{ q.id }}">
+                        <input type="text" name="answers" class="form-control" placeholder="Введите пропущенное слово" autocomplete="off">
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="btn btn-success">Проверить</button>
+                <a href="/practice" class="btn btn-link">Назад</a>
+            </form>
+            <script>
+            (function(){
+                const form = document.getElementById('mode4-form');
+                const toggleBtn = document.getElementById('toggle-choices');
+                const list = document.getElementById('mode4-list');
+                let choicesMode = false;
+
+                toggleBtn.addEventListener('click', function(){
+                    if (choicesMode) return; // один раз
+                    choicesMode = true;
+                    toggleBtn.disabled = true;
+                    toggleBtn.textContent = 'Варианты показаны';
+                    try {
+                        const rows = Array.from(list.querySelectorAll('.list-group-item'));
+                        const inputs = Array.from(list.querySelectorAll('input[name="answers"]'));
+                        // Все правильные ответы текущего набора
+                        const allAnswers = rows.map(r => (r.getAttribute('data-answer')||'').trim()).filter(Boolean);
+                        // Уже введённые пользователем значения (до переключения)
+                        const entered = new Set(inputs.map(i => (i.value||'').trim().toLowerCase()).filter(Boolean));
+                        // Список вариантов = все ответы минус уже введённые пользователем
+                        const remaining = allAnswers.filter(a => !entered.has(a.toLowerCase()));
+                        // Заменяем input -> select с опциями из remaining
+                        inputs.forEach(i => {
+                            const sel = document.createElement('select');
+                            sel.name = 'answers';
+                            sel.className = 'form-select';
+                            const placeholder = document.createElement('option');
+                            placeholder.value = '';
+                            placeholder.textContent = 'Выберите слово';
+                            placeholder.disabled = true;
+                            placeholder.selected = true;
+                            sel.appendChild(placeholder);
+                            remaining.forEach(val => {
+                                const opt = document.createElement('option');
+                                opt.value = val; opt.textContent = val;
+                                sel.appendChild(opt);
+                            });
+                            const current = (i.value||'').trim();
+                            if (current) {
+                                const has = remaining.some(v => v.toLowerCase() === current.toLowerCase());
+                                if (has) sel.value = current;
+                            }
+                            i.replaceWith(sel);
+                        });
+                    } catch(e) {}
+                });
+            })();
+            </script>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="practice-stats">
+        <div class="card">
+            <div class="card-header">
+                <h3>📊 Ваш прогресс</h3>
+            </div>
+            <div class="card-body">
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-number">{{ total_words or 0 }}</div>
+                        <div class="stat-label">Всего слов в словаре</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ total_uses or 0 }}</div>
+                        <div class="stat-label">Всего решений упражнений</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ practiced_today or 0 }}</div>
+                        <div class="stat-label">Отработано сегодня</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ zero_uses or 0 }}</div>
+                        <div class="stat-label">Ещё не практиковались</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ missing_translation or 0 }}</div>
+                        <div class="stat-label">Без перевода</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ missing_examples or 0 }}</div>
+                        <div class="stat-label">Без примеров</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+
+    <div class="quick-actions">
+        <a href="/words" class="btn btn-outline-primary">
+            <span class="btn-icon">📚</span>
+            Перейти к словарю
+        </a>
+        <a href="/" class="btn btn-outline-secondary">
+            <span class="btn-icon">🏠</span>
+            На главную
+        </a>
+    </div>
+</div>
+
+<style>
+.practice-modes {
+    margin-bottom: 40px;
+}
+
+.practice-card {
+    background: white;
+    border-radius: 15px;
+    padding: 30px 25px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.practice-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+}
+
+.practice-card.featured {
+    border: 3px solid #28a745;
+    transform: scale(1.05);
+}
+
+.practice-card.featured:hover {
+    transform: scale(1.05) translateY(-10px);
+}
+
+.practice-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
+    display: block;
+}
+
+.practice-card h3 {
+    margin-bottom: 15px;
+    color: #333;
+    font-size: 1.3rem;
+}
+
+.practice-card p {
+    color: #666;
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+
+.practice-features {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 25px;
+    flex-wrap: wrap;
+}
+
+.feature-tag {
+    background: #e9ecef;
+    color: #495057;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.practice-btn {
+    width: 100%;
+    justify-content: center;
+}
+
+.practice-stats {
+    margin-bottom: 40px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    transition: transform 0.3s ease;
+}
+
+.stat-item:hover {
+    transform: translateY(-5px);
+}
+
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #667eea;
+    margin-bottom: 10px;
+}
+
+.stat-label {
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.practice-tips {
+    margin-bottom: 40px;
+}
+
+.tips-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.tip-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    transition: transform 0.3s ease;
+}
+
+.tip-item:hover {
+    transform: translateY(-3px);
+}
+
+.tip-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+}
+
+.tip-content h4 {
+    margin-bottom: 8px;
+    color: #333;
+    font-size: 1.1rem;
+}
+
+.tip-content p {
+    color: #666;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+    .practice-card.featured {
+        transform: none;
+    }
+    
+    .practice-card.featured:hover {
+        transform: translateY(-10px);
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .tips-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+
+
